@@ -116,7 +116,7 @@ static struct page *LinuxDriverNoPage(struct vm_area_struct *vma,
 #endif
 static int LinuxDriverMmap(struct file *filp, struct vm_area_struct *vma);
 
-static void LinuxDriverPollTimeout(compat_timer_arg_t unused);
+static void LinuxDriverPollTimeout(unsigned long clientData);
 static unsigned int LinuxDriverEstimateTSCkHz(void);
 
 static struct vm_operations_struct vmuser_mops = {
@@ -228,7 +228,7 @@ LinuxDriverEstimateTSCkHz(void)
  *----------------------------------------------------------------------
  */
 static void
-LinuxDriverEstimateTSCkHzDeferred(compat_timer_arg_t unused)
+LinuxDriverEstimateTSCkHzDeferred(compat_timer_arg_t unused)	
 {
    LinuxDriverEstimateTSCkHz();
 }
@@ -266,7 +266,9 @@ LinuxDriverInitTSCkHz(void)
    }
 
    Vmx86_ReadTSCAndUptime(&tsckHzStartTime);
+   //tscTimer.function = LinuxDriverEstimateTSCkHzDeferred;
    tscTimer.expires  = jiffies + 4 * HZ;
+   //tscTimer.data     = 0;
    add_timer(&tscTimer);
 }
 
@@ -308,7 +310,10 @@ init_module(void)
     */
 
    init_waitqueue_head(&linuxState.pollQueue);
-   compat_timer_setup(&linuxState.pollTimer, LinuxDriverPollTimeout, 0);
+   //init_timer(&linuxState.pollTimer);
+   timer_setup(&linuxState.pollTimer, LinuxDriverEstimateTSCkHzDeferred, 0);
+   //linuxState.pollTimer.data = 0;
+   //linuxState.pollTimer.function = LinuxDriverPollTimeout;
 
    linuxState.fastClockThread = NULL;
    linuxState.fastClockFile = NULL;
@@ -357,7 +362,7 @@ init_module(void)
        linuxState.deviceName, linuxState.major, linuxState.minor);
 
    HostIF_InitUptime();
-   compat_timer_setup(&tscTimer, LinuxDriverEstimateTSCkHzDeferred, 0);
+   timer_setup(&tscTimer, LinuxDriverEstimateTSCkHzDeferred, 0);
    LinuxDriverInitTSCkHz();
    Vmx86_InitIDList();
 
@@ -855,7 +860,7 @@ LinuxDriverPoll(struct file *filp,  // IN:
  */
 
 static void
-LinuxDriverPollTimeout(compat_timer_arg_t unused)  // IN:
+LinuxDriverPollTimeout(unsigned long clientData)  // IN:
 {
    LinuxDriverWakeUp(FALSE);
 }
@@ -1284,7 +1289,7 @@ LinuxDriverReadTSC(void *data,   // OUT: TSC values
  *-----------------------------------------------------------------------------
  */
 
-__always_inline static Bool
+__attribute__((always_inline)) static Bool
 LinuxDriverSyncReadTSCs(uint64 *delta) // OUT: TSC max - TSC min
 {
    TSCDelta tscDelta;
